@@ -14,6 +14,7 @@ class ST7789LCDDisplay : public DisplayDriver {
   Adafruit_ST7789 display;
   bool _isOn;
   uint16_t _color;
+  uint8_t _textsize = 1;   // tracked for the GFX-font baseline offset
   RefCountedDigitalPin* _peripher_power;
 
   bool i2c_probe(TwoWire& wire, uint8_t addr);
