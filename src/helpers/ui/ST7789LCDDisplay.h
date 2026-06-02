@@ -8,7 +8,7 @@
 #include <helpers/RefCountedDigitalPin.h>
 
 class ST7789LCDDisplay : public DisplayDriver {
-  #if defined(LILYGO_TDECK) || defined(HELTEC_LORA_V4_TFT)
+  #if defined(LILYGO_TDECK) || defined(HELTEC_LORA_V4_TFT) || defined(LILYGO_TWATCH_S3)
     SPIClass displaySPI;
   #endif
   Adafruit_ST7789 display;
@@ -25,7 +25,7 @@ public:
   {
     _isOn = false;
   }
-#elif defined(LILYGO_TDECK) || defined(HELTEC_LORA_V4_TFT)
+#elif defined(LILYGO_TDECK) || defined(HELTEC_LORA_V4_TFT) || defined(LILYGO_TWATCH_S3)
   ST7789LCDDisplay(RefCountedDigitalPin* peripher_power=NULL) : DisplayDriver(128, 64),
       displaySPI(HSPI),
       display(&displaySPI, PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_RST),

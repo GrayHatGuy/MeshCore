@@ -8,6 +8,15 @@ void TWatchS3Board::begin() {
 
   power_init();
 
+#if defined(TWATCH_INHIBIT_SLEEP) && (TWATCH_INHIBIT_SLEEP)
+  // Never enter light sleep: keeps the CPU -- and therefore every AXP2101 rail,
+  // especially ALDO4 (radio) -- continuously powered, so the SX1280 is never put
+  // through a sleep/wake cycle that can corrupt its state or disrupt begin(). Trades
+  // battery for radio stability; clear the TWATCH_INHIBIT_SLEEP flag to re-enable
+  // MeshCore's periodic light sleep once SX1280 sleep/wake is sorted.
+  setInhibitSleep(true);
+#endif
+
 #ifdef PIN_USER_BTN
   pinMode(PIN_USER_BTN, INPUT);
 #endif
@@ -30,13 +39,16 @@ bool TWatchS3Board::power_init() {
 
   PMU->setChargingLedMode(XPOWERS_CHG_LED_CTRL_CHG);
 
-  // --- Radio / display / RTC rails (enabled on both S3 and S3 Plus wiring) ---
+  // --- Peripheral rails (LilyGo factory rail table) ---
+  // ALDO4 (radio) MUST stay on for the whole session: cutting it drops the
+  // SX1262/SX1280 and corrupts radio state. Light sleep does not touch these rails,
+  // and begin() additionally inhibits sleep when TWATCH_INHIBIT_SLEEP is set.
   PMU->setPowerChannelVoltage(XPOWERS_ALDO2, 3300);
-  PMU->enablePowerOutput(XPOWERS_ALDO2);   // screen / sensors / PCF8563 RTC
+  PMU->enablePowerOutput(XPOWERS_ALDO2);   // TFT backlight (LCD_VDD)
   PMU->setPowerChannelVoltage(XPOWERS_ALDO3, 3300);
-  PMU->enablePowerOutput(XPOWERS_ALDO3);   // LoRa radio (standard S3) / display+touch (Plus)
+  PMU->enablePowerOutput(XPOWERS_ALDO3);   // ST7789 display + FT6336 touch
   PMU->setPowerChannelVoltage(XPOWERS_ALDO4, 3300);
-  PMU->enablePowerOutput(XPOWERS_ALDO4);   // LoRa radio (Plus) / GPS (standard S3)
+  PMU->enablePowerOutput(XPOWERS_ALDO4);   // LoRa radio (SX1262 / SX1280) -- KEEP ON
 
 #if defined(ENV_INCLUDE_GPS) && (ENV_INCLUDE_GPS)
   // --- GPS rails (T-Watch S3 Plus) ---
