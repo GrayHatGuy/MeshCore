@@ -19,6 +19,9 @@
   #include <helpers/ui/ST7789LCDDisplay.h>
   #include <helpers/ui/MomentaryButton.h>
 #endif
+#ifdef TOUCH_FT6X36
+  #include <helpers/ui/TouchFT6X36.h>
+#endif
 
 extern TWatchS3Board board;
 extern WRAPPER_CLASS radio_driver;
@@ -32,6 +35,9 @@ extern AutoDiscoverRTCClock rtc_clock;
 #ifdef DISPLAY_CLASS
   extern DISPLAY_CLASS display;
   extern MomentaryButton user_btn;
+#endif
+#ifdef TOUCH_FT6X36
+  extern TouchFT6X36 touch;
 #endif
 
 bool radio_init();

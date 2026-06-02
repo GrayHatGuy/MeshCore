@@ -754,6 +754,16 @@ void UITask::loop() {
     _analogue_pin_read_millis = millis();
   }
 #endif
+#ifdef TOUCH_FT6X36
+  {
+    int tev = touch.check();
+    if (tev == BUTTON_EVENT_CLICK) {
+      c = checkDisplayOn(KEY_NEXT);     // tap -> wake screen / next page
+    } else if (tev == BUTTON_EVENT_LONG_PRESS) {
+      c = handleLongPress(KEY_ENTER);   // touch-and-hold -> enter / long-press action
+    }
+  }
+#endif
 #if defined(BACKLIGHT_BTN)
   if (millis() > next_backlight_btn_check) {
     bool touch_state = digitalRead(PIN_BUTTON2);
