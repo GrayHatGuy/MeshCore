@@ -975,7 +975,8 @@ struct FreqRange {
 static FreqRange repeat_freq_ranges[] = {
   { 433000, 433000 },
   { 869000, 869000 },
-  { 918000, 918000 }
+  { 918000, 918000 },
+  { 2400000, 2500000 }   // 2.4 GHz ISM band (SX1280 / LR1121) -- allow client-repeat at e.g. 2450
 };
 
 bool MyMesh::isValidClientRepeatFreq(uint32_t f) const {
