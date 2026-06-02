@@ -1,0 +1,110 @@
+#include <Arduino.h>
+#include "target.h"
+
+ESP32Board board;
+
+static SPIClass spi;
+RADIO_CLASS radio = new Module(P_LORA_NSS, P_LORA_DIO_1, P_LORA_RESET, P_LORA_BUSY, spi);
+WRAPPER_CLASS radio_driver(radio, board);
+
+ESP32RTCClock fallback_clock;
+AutoDiscoverRTCClock rtc_clock(fallback_clock);
+SensorManager sensors;
+
+#ifndef LORA_CR
+  #define LORA_CR 5
+#endif
+#ifndef LORA_PREAMBLE
+  #define LORA_PREAMBLE 16
+#endif
+
+// LilyGo T3S3 v1.3 LR1121 RF switch table (DIO5 / DIO6), from the LilyGo /
+// Meshtastic tlora_t3s3_v1 reference. MODE_TX_HF is the 2.4 GHz transmit path.
+// NOTE: this table is the one knob to adjust if 2.4 GHz TX/RX misbehaves on a
+// particular board revision.
+static const uint32_t rfswitch_dio_pins[] = {
+  RADIOLIB_LR11X0_DIO5, RADIOLIB_LR11X0_DIO6, RADIOLIB_NC, RADIOLIB_NC, RADIOLIB_NC
+};
+static const Module::RfSwitchMode_t rfswitch_table[] = {
+  // mode                  DIO5  DIO6
+  { LR11x0::MODE_STBY,   { LOW,  LOW  } },
+  { LR11x0::MODE_RX,     { HIGH, LOW  } },
+  { LR11x0::MODE_TX,     { LOW,  HIGH } },
+  { LR11x0::MODE_TX_HP,  { LOW,  HIGH } },
+  { LR11x0::MODE_TX_HF,  { LOW,  LOW  } },   // 2.4 GHz high-frequency path
+  { LR11x0::MODE_GNSS,   { LOW,  LOW  } },
+  { LR11x0::MODE_WIFI,   { LOW,  LOW  } },
+  END_OF_MODE_TABLE,
+};
+
+bool radio_init() {
+  fallback_clock.begin();
+  rtc_clock.begin(Wire);
+
+#ifdef LR11X0_DIO3_TCXO_VOLTAGE
+  float tcxo = LR11X0_DIO3_TCXO_VOLTAGE;
+#else
+  float tcxo = 1.6f;
+#endif
+
+  spi.begin(P_LORA_SCLK, P_LORA_MISO, P_LORA_MOSI);
+
+  // TCXO reference voltage on DIO3. RadioLib 7.7.x reads this member during begin()'s
+  // modSetup(), so set it before calling begin().
+  radio.tcxoVoltage = tcxo;
+
+  // The freq-taking LR11x0 begin() overload hardcodes high=false, which rejects the
+  // wide 2.4 GHz bandwidths (e.g. 812.5 kHz). Call the base begin() with high mode
+  // selected from the configured frequency, then set the 2.4 GHz carrier explicitly
+  // (LR1120::setFrequency accepts 2400-2500 MHz and flags high-freq operation).
+  bool high = (LORA_FREQ > 1000.0f);
+  int status = radio.LR11x0::begin(LORA_BW, LORA_SF, LORA_CR, RADIOLIB_LR11X0_LORA_SYNC_WORD_PRIVATE,
+                                   LORA_PREAMBLE, high);
+  if (status != RADIOLIB_ERR_NONE) {
+    Serial.print("ERROR: radio init failed: ");
+    Serial.println(status);
+    return false;  // fail
+  }
+
+  radio.setRfSwitchTable(rfswitch_dio_pins, rfswitch_table);
+
+  // setFrequency before setOutputPower so the correct (HF) PA path is selected.
+  status = radio.setFrequency(LORA_FREQ);
+  if (status != RADIOLIB_ERR_NONE) {
+    Serial.print("ERROR: setFrequency failed: ");
+    Serial.println(status);
+    return false;
+  }
+
+  radio.setOutputPower(LORA_TX_POWER);
+  radio.setRegulatorDCDC();
+  radio.setCRC(2);
+
+#ifdef LR11X0_RX_BOOSTED_GAIN
+  radio.setRxBoostedGainMode(LR11X0_RX_BOOSTED_GAIN);
+#else
+  radio.setRxBoostedGainMode(true);
+#endif
+
+  return true;  // success
+}
+
+uint32_t radio_get_rng_seed() {
+  return radio.random(0x7FFFFFFF);
+}
+
+void radio_set_params(float freq, float bw, uint8_t sf, uint8_t cr) {
+  radio.setFrequency(freq);
+  radio.setSpreadingFactor(sf);
+  radio.setBandwidth(bw, freq > 1000.0f);   // high-mode BW when on the 2.4 GHz band
+  radio.setCodingRate(cr);
+}
+
+void radio_set_tx_power(int8_t dbm) {
+  radio.setOutputPower(dbm);
+}
+
+mesh::LocalIdentity radio_new_identity() {
+  RadioNoiseListener rng(radio);
+  return mesh::LocalIdentity(&rng);  // create new random identity
+}
