@@ -3,6 +3,13 @@
 #include <Arduino.h>
 #include "TWatchS3Board.h"
 
+#if defined(MOTION_BMA423) && (MOTION_BMA423)
+  #include <helpers/sensors/MotionBMA423.h>
+  #ifndef PIN_MOTION_INT
+    #define PIN_MOTION_INT 14   // BMA423 INT1 on the T-Watch S3 (RTC-capable)
+  #endif
+#endif
+
 void TWatchS3Board::begin() {
   ESP32Board::begin();   // sets startup_reason, battery pin, and Wire.begin(PIN_BOARD_SDA, PIN_BOARD_SCL)
 
@@ -19,6 +26,20 @@ void TWatchS3Board::begin() {
 
 #ifdef PIN_USER_BTN
   pinMode(PIN_USER_BTN, INPUT);
+#endif
+
+#if defined(MOTION_BMA423) && (MOTION_BMA423)
+  // BMA423 accelerometer shares the main I2C bus (Wire, brought up in ESP32Board::begin()).
+  // Enable the wrist-tilt + double-tap wake gestures (task #18 power-save). Ambient motion
+  // is deliberately NOT a wake source.
+  _motion = new MotionBMA423();
+  if (_motion->begin(Wire, PIN_MOTION_INT)) {
+    Serial.printf("[MOTION] BMA423 init ok (wrist-tilt + double-tap, INT=GPIO%d)\n", PIN_MOTION_INT);
+  } else {
+    Serial.println("[MOTION] BMA423 init FAILED (check I2C 0x19 / rails)");
+    delete _motion;
+    _motion = NULL;
+  }
 #endif
 }
 
@@ -85,5 +106,16 @@ bool TWatchS3Board::power_init() {
 
   return true;
 }
+
+#if defined(MOTION_BMA423) && (MOTION_BMA423)
+// Per-cycle board hook (called from the example main loop via board.loop()).
+// Bring-up (#18 step 1): poll the accelerometer and log each intentional gesture.
+// Step 2 will replace this logging with the actual display-wake / sleep policy.
+void TWatchS3Board::loop() {
+  // Poll the accelerometer; the UI consumes wake gestures and turns the screen on
+  // (see UITask::loop). Kept logging-free so the gesture flag survives for the UI.
+  if (_motion) _motion->loop();
+}
+#endif
 
 #endif

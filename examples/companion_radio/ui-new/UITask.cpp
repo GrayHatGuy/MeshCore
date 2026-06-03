@@ -31,6 +31,10 @@
 
 #include "icons.h"
 
+#if defined(MOTION_BMA423) && (MOTION_BMA423)
+  #include <helpers/sensors/MotionBMA423.h>
+#endif
+
 class SplashScreen : public UIScreen {
   UITask* _task;
   unsigned long dismiss_after;
@@ -773,6 +777,18 @@ void UITask::loop() {
     expander.digitalWrite(EXP_PIN_BACKLIGHT, !touch_state);
 #endif
     next_backlight_btn_check = millis() + 300;
+  }
+#endif
+
+#if defined(MOTION_BMA423) && (MOTION_BMA423)
+  // A wrist-raise (calibrated lift) / wrist-tilt / double-tap wakes the screen, like a
+  // tap -- but without injecting a key, so it does not change pages or trigger actions.
+  {
+    MotionBMA423* m = (MotionBMA423*) _board->getMotionSensor();
+    if (m && m->hasWakeGesture()) {
+      m->clear();
+      checkDisplayOn(0);   // turn the display on (if off) and extend the auto-off timer
+    }
   }
 #endif
 
